@@ -57,6 +57,9 @@ class DRQN(nn.Module):
         return self.duel(v, a), (h_n, c_n)
 
     def duel(self, v, a):
+        """
+        a - Tensor[BS, N_ACTION]
+        v - Tensor[BS, 1]
+        """
         q = v + a - a.mean(dim=1, keepdim=True)
         return q.squeeze(1)
-
