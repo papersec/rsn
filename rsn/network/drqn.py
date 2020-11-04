@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -24,7 +25,7 @@ class DRQN(nn.Module):
     
     def forward(self, fs, hidden, action, reward):
         """
-        fs (=framestack) - Tensor[SEQ_LEN, BS, STACK, SCR_W, SCR_H]
+        fs (=framestack) - Tensor[SEQ_LEN, BS, STACK, SCR_H, SCR_W]
         hidden - tuple(Tensor[BS, HIDDEN_SIZE], Tensor[BS, HIDDEN_SIZE])
             hidden state와 cell state의 tuple
         action - Tensor[SEQ_LEN, BS, N_ACTION]
@@ -62,4 +63,4 @@ class DRQN(nn.Module):
         v - Tensor[BS, 1]
         """
         q = v + a - a.mean(dim=1, keepdim=True)
-        return q.squeeze(1)
+        return q

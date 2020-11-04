@@ -1,1 +1,1 @@
-from network.drqn import DRQN
+from rsn.network.drqn import DRQN
