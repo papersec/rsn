@@ -14,11 +14,11 @@ class _RemoteParameterServer:
         self.q = None
         self.q_target = None
     
-    def update(self, q, q_target):
+    def upload(self, q, q_target):
         self.q = q
         self.q_target = q_target
 
-    def get(self):
+    def download(self):
         return self.q, self.q_target
 
 
@@ -29,10 +29,7 @@ class ParameterServer:
     
     def upload(self, q, q_target, wait=True):
         ref = self.ps.upload.remote(q, q_target)
-        if wait:
-            return ray.get(ref)
-        else:
-            return ref
+        return ray.get(ref)
 
     def download(self):
         return ray.get(self.ps.download.remote())

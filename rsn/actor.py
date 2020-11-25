@@ -8,9 +8,10 @@ import numpy as np
 import torch
 
 from rsn.network import DRQN
-from rsn.hyper_parameter import SEQUENCE_LENGTH
+from rsn.hyper_parameter import BURN_IN_LENGTH, SEQUENCE_LENGTH, SEQUENCE_OVERLAP, N_STEP_BOOTSTRAPING
+SEQUENCE_REMAIN = (BURN_IN_LENGTH + N_STEP_BOOTSTRAPING) % SEQUENCE_OVERLAP
 
-Sar = namedtuple("Sar", ['s', 'a', 'r'])
+HSAR = namedtuple("HSAR", ['h', 's', 'a', 'r'])
 
 class Actor:
     
@@ -42,14 +43,15 @@ class Actor:
         return action
 
     def run_episode(self):
+        env = self.env
         trajectory = deque(maxlen=SEQUENCE_LENGTH)
 
-        obs = self.env.reset()
+        raw_obs = self.env.reset()
         hidden = (torch.zeros(size=(1, 512)), torch.zeros(size=(1, 512)))
 
-        for t in range(108000):
+        for t in range(1, 108000+1):
             # observation 전처리
-            obs = torch.from_numpy(np.array(obs) / 256)
+            obs = torch.from_numpy(np.array(raw_obs) / 256)
             obs = obs.view(1, 1, *obs.shape)
 
             # prev action, reward 가져오기
@@ -71,6 +73,10 @@ class Actor:
             reward, next_obs, done, _ = env.step(action)
 
             # Add Experience to Local buffer
+            if t % SEQUENCE_OVERLAP == SEQUENCE_REMAIN and t >= (BURN_IN_LENGTH+SEQUENCE_LENGTH+N_STEP_BOOTSTRAPING):
+                
+                pass
+
             # Send Experiences
             # obs <- next_obs
             # Parameter Update
