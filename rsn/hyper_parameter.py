@@ -2,6 +2,12 @@
 hyper parameter
 """
 
+
+
+"""General Reinforcement Learning"""
+REPLAY_MEMORY_SIZE = 2**22 # 4194304
+ACTOR_EXPERIENCE_BUFFER_SIZE = 50
+
 """LSTM"""
 BURN_IN_LENGTH = 40
 SEQUENCE_LENGTH = 80
@@ -9,5 +15,5 @@ SEQUENCE_OVERLAP = 40
 
 """PER: Prioritized Experience Replay"""
 N_STEP_BOOTSTRAPING = 5
-PRIORITY_EXPONENT = 0.9 # Priority Exponent
-IMPORTANCE_SAMPlING_EXPONENT = 0.6 # Importance Sampling Exponent
+PRIORITY_EXPONENT = 0.9
+IMPORTANCE_SAMPlING_EXPONENT = 0.6

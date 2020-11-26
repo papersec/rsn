@@ -8,10 +8,26 @@ import numpy as np
 import torch
 
 from rsn.network import DRQN
-from rsn.hyper_parameter import BURN_IN_LENGTH, SEQUENCE_LENGTH, SEQUENCE_OVERLAP, N_STEP_BOOTSTRAPING
+from rsn.hyper_parameter import ACTOR_EXPERIENCE_BUFFER_SIZE
+from rsn.hyper_parameter import BURN_IN_LENGTH, SEQUENCE_LENGTH, SEQUENCE_OVERLAP
+from rsn.hyper_parameter import N_STEP_BOOTSTRAPING
 SEQUENCE_REMAIN = (BURN_IN_LENGTH + N_STEP_BOOTSTRAPING) % SEQUENCE_OVERLAP
 
 HSAR = namedtuple("HSAR", ['h', 's', 'a', 'r'])
+SAR = namedtuple("SAR", ['s', 'a', 'r'])
+Experience = namedtuple("Experience", ["hidden", "burnin", "sequence", "bootstrap"])
+
+def _tie_sar(trajectory):
+    """
+    trajectory - list(SAR)
+    """
+    s, a, r = zip(*trajectory)
+    # 이제 s, a, r 각각은 len(trajectory) 길이의 튜플
+    a = np.array(a)
+    r = np.array(r)
+
+    return SAR(s, a, r)
+
 
 class Actor:
     
@@ -27,7 +43,7 @@ class Actor:
         self.q = DRQN(n_action)
         self.q_target = DRQN(n_action)
 
-    def act(self, q_values):
+    def act(self, q_values) -> int:
         """
         q_values - Tensor[N_ACTION]
         """
@@ -40,11 +56,11 @@ class Actor:
         else:
             # Q를 이용한 action 결정
             action = torch.argmax(q_values)
-        return action
+        return int(action)
 
     def run_episode(self):
         env = self.env
-        trajectory = deque(maxlen=SEQUENCE_LENGTH)
+        trajectory = deque(maxlen=BURN_IN_LENGTH+SEQUENCE_LENGTH+N_STEP_BOOTSTRAPING)
 
         raw_obs = self.env.reset()
         hidden = (torch.zeros(size=(1, 512)), torch.zeros(size=(1, 512)))
@@ -68,16 +84,47 @@ class Actor:
             with torch.no_grad():
                 q_values, hidden = self.q(obs, hidden, prev_action, prev_reward)
 
+            # action 선택
             action = self.act(q_values.squeeze(0))
 
+            # action 실행
             reward, next_obs, done, _ = env.step(action)
+
+            # trajectory update
+            hsar = HSAR(
+                h = hidden,
+                s = raw_obs,
+                a = action,
+                r = reward,
+            )
+            trajectory.append(hsar)
 
             # Add Experience to Local buffer
             if t % SEQUENCE_OVERLAP == SEQUENCE_REMAIN and t >= (BURN_IN_LENGTH+SEQUENCE_LENGTH+N_STEP_BOOTSTRAPING):
-                
-                pass
+                burnin = trajectory[0:BURN_IN_LENGTH]
+                sequence = trajectory[BURN_IN_LENGTH:BURN_IN_LENGTH+SEQUENCE_LENGTH]
+                bootstrap = trajectory[BURN_IN_LENGTH+SEQUENCE_LENGTH:]
+
+                burnin, sequence, bootstrap = list(map(_tie_sar, (burnin, sequence, bootstrap)))
+
+                e = Experience(
+                    hidden=trajectory[0].hidden,
+                    burnin=burnin,
+                    sequence=sequence,
+                    bootstrap=bootstrap,
+                )
+
+                self.local_buffer.append(e)
 
             # Send Experiences
+            if len(self.local_buffer >= ACTOR_EXPERIENCE_BUFFER_SIZE):
+                # Calculate TD ERROR
+                # Burn in
+                # Main Sequence
+                # expected Q
+
+                pass
+
             # obs <- next_obs
             # Parameter Update
 
