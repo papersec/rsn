@@ -1,0 +1,6 @@
+README.md
+setup.py
+papersec.egg-info/PKG-INFO
+papersec.egg-info/SOURCES.txt
+papersec.egg-info/dependency_links.txt
+papersec.egg-info/top_level.txt

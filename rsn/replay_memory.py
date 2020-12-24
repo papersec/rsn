@@ -124,10 +124,13 @@ class _RemoteReplayMemory:
 
 class ReplayMemory:
 
-    def __init__(self):
-        self.rm = _RemoteReplayMemory.remote()
+    def __init__(self, capacity):
+        self.rm = _RemoteReplayMemory.remote(capacity)
     
     def add(self, experience, td_error):
+        if type(experience) is list: # 여러 experience add
+            for e, t in zip(experience, td_error):
+                self.add(e, t)
         return ray.get(self.rm.add.remote(experience, td_error))
 
     def sample(self, size):

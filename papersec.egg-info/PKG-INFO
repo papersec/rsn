@@ -1,0 +1,23 @@
+Metadata-Version: 2.1
+Name: papersec
+Version: 0.0.1
+Summary: Recurrent State Navigator
+Home-page: https://github.com/papersec/rsn
+Author: Kim Minseong
+Author-email: devget43@gmail.com
+License: UNKNOWN
+Description: # rsn
+        Recurrent State Navigator
+        
+        Requirements
+        - numpy [1.19.2]
+        - pytorch [1.7.0]
+        - ray [1.0.0]
+        - gym [unknown]
+        - atari-py [unknown]
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: Ubuntu 20.04
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown

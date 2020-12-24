@@ -1,2 +1,4 @@
 .vscode/
 *.pyc
+.papersec.egg-info/
+.rsn/testlog/
