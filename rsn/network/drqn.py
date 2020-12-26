@@ -36,13 +36,13 @@ class DRQN(nn.Module):
         """
         seq_len, bs = fs.shape[0:2]
 
-        x = fs.view(seq_len*bs, *fs.shape[2:])
+        x = fs.reshape(seq_len*bs, *fs.shape[2:])
         x = F.relu(self.conv1(x))
-        x = F.relu(self.conf2(x))
+        x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         # now shape of x is [SEQ_LEN*BS, 7, 7, 64]
 
-        x = x.view(seq_len, bs, -1)
+        x = x.reshape(seq_len, bs, -1)
         x = torch.cat((x, action, reward), dim=2)
 
         # LSTM hidden state input has dim0=num_layers*num_directions which is 1
@@ -52,6 +52,7 @@ class DRQN(nn.Module):
         # shape of x is [SEQ_LEN, BS, HIDDEN_SIZE] (ignore)
         # shape of h_n, c_n is [1, BS, HIDDEN_SIZE]
         h_n, c_n = [h.squeeze(0) for h in (h_n, c_n)]
+        # Now shape of h_n, c_n is [BS, HIDDEN_SIZE]
 
         v = self.fc_v_1(F.relu(self.fc_v_0(h_n)))
         a = self.fc_a_1(F.relu(self.fc_a_0(h_n)))

@@ -51,17 +51,21 @@ class SumTree:
         return self.tree[0]
 
     def add(self, p, data):
-        idx = self.cursor + self.capacity - 1
+        if isinstance(p, list):
+            for p_, data_ in zip(p, data):
+                self.add(p_, data_)
+        else:
+            idx = self.cursor + self.capacity - 1
 
-        self.data[self.cursor] = data
-        self.update(idx, p)
+            self.data[self.cursor] = data
+            self.update(idx, p)
 
-        self.cursor += 1
-        if self.cursor >= self.capacity:
-            self.cursor = 0
+            self.cursor += 1
+            if self.cursor >= self.capacity:
+                self.cursor = 0
 
-        if self.size < self.capacity:
-            self.size += 1
+            if self.size < self.capacity:
+                self.size += 1
 
     def update(self, idx, p):
         self.tree[idx] = p
@@ -82,8 +86,12 @@ class _RemoteReplayMemory:
         self.tree = SumTree.remote(capacity=capacity)
     
     def add(self, experience, td_error): # Actor -> ReplayMemory
-        p = _get_priority(td_error)
-        ray.get(self.tree.add.remote(p, experience))
+        if type(experience) is list:
+            p = [_get_priority(tde) for tde in td_error]
+            ray.get(self.tree.add.remote(p, experience))
+        else:
+            p = _get_priority(td_error)
+            ray.get(self.tree.add.remote(p, experience))
     
     def sample(self, size): # ReplayMemory -> Learner
         tree_total = ray.get(self.tree.total.remote())
@@ -128,9 +136,6 @@ class ReplayMemory:
         self.rm = _RemoteReplayMemory.remote(capacity)
     
     def add(self, experience, td_error):
-        if type(experience) is list: # 여러 experience add
-            for e, t in zip(experience, td_error):
-                self.add(e, t)
         return ray.get(self.rm.add.remote(experience, td_error))
 
     def sample(self, size):

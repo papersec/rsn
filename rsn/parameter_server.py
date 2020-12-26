@@ -27,7 +27,7 @@ class ParameterServer:
     def __init__(self):
         self.ps = _RemoteParameterServer.remote()
     
-    def upload(self, q, q_target, wait=True):
+    def upload(self, q, q_target):
         ref = self.ps.upload.remote(q, q_target)
         return ray.get(ref)
 

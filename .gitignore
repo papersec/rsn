@@ -1,4 +1,8 @@
 .vscode/
 *.pyc
-.papersec.egg-info/
-.rsn/testlog/
+*.dat
+
+# Python Egg Metadata
+/*.egg-info
+
+rsn/testlog/

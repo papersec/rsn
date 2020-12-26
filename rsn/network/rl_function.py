@@ -2,45 +2,58 @@
 rl_function
 """
 
-
+import numpy as np
 import torch
 
-from rsn.util.preprocess import preprocess_observation, reward_to_tensor, action_to_tensor
 from rsn.util.rescale_q import inverse_rescale, rescale
+from rsn.util import make_1darray
+
 from rsn.hyper_parameter import DISCOUNT_FACTOR, N_STEP_BOOTSTRAPING
 
 def replay_q(q, device, sequence, n_action, hidden=None, no_grad=False):
     """
-    given ARHS sequence를 q 신경망에 입력하여 출력 반환
-    hiddend 이 주어지지 않으면 첫 ARHS의 h 사용
+    given ARHS sequence들을 q 신경망에 입력하여 출력 반환
+    hidden 이 주어지지 않으면 sequence 첫 ARHS의 h 사용
 
     q: q 네트워크
-    hidden - list((Tensor[HIDDEN_STATE_DIMENSION], Tensor[HIDDEN_STATE_DIMENSION]))
-    sequence - list(ARHS)
-    boolean
+    hidden - ndarray[BATCH_SIZE], dtype=(Tensor[HIDDEN_SIZE], Tensor[HIDDEN_SIZE])
+    sequence - ndarray[SEQ_LEN, BATCH_SIZE], dtype=ARHS
     """
-    a, r, h, s = zip(*sequence)
 
-    s = torch.stack([torch.stack([preprocess_observation(raw_obs) for raw_obs in s_]) for s_ in s])
-    s = s.permute(1,0,2,3,4).to(device)
-    # now type of s is Tensor[SEQ_LENGTH, BS, STACK, SCR_H, SCR_W]
+    seq_len, batch_size = sequence.shape
+
+    sequence = sequence.reshape(seq_len * batch_size)
+
+    a, r, h, s = (make_1darray(e) for e in zip(*sequence))
+
+    a = a.astype(np.int64)
+    a = torch.from_numpy(a)
+    a_tensor = torch.zeros(size=(seq_len*batch_size, n_action), dtype=torch.int64)
+    a_tensor[torch.arange(seq_len*batch_size), a] = 1
+    a = a_tensor.reshape(seq_len, batch_size, n_action)
+    # Now type of a is Tensor[SEQ_LEN, BS, N_ACTION]
+
+    r = r.reshape(seq_len, batch_size).astype(np.float32)
+    r = torch.from_numpy(r).unsqueeze(2).float().float().to(device)
+    # Now type of r is Tensor[SEQ_LEN, BS, 1]
 
     if hidden is None:
-        h = zip(*[h_[0] for h_ in h])
+        h = h[:batch_size]
+        h = (torch.stack(e).float().to(device) for e in zip(*h))
     else:
-        h = zip(*hidden)
+        h = hidden
     
-    h = tuple(map(torch.stack, h))
-    # now type of h is tuple(Tensor[BS, HIDDEN_SIZE], Tensor[BS, HIDDEN_SIZE])
+    # Now type of h is (Tensor[BS, HIDDEN_SIZE], Tensor[BS, HIDDEN_SIZE])
 
-    a_tensor = action_to_tensor(a, n_action)
-    r_tensor = reward_to_tensor(r)
+    s = torch.stack(tuple(s))
+    s = s.reshape(seq_len, batch_size, *s.shape[1:]).float().to(device)
+    # Now type of s is Tensor[SEQ_LEN, BS, FRAMESTACK, SCR_H, SCR_W]
 
     if no_grad:
         with torch.no_grad():
-            q_values, hidden = q(s, h, a_tensor, r_tensor)
+            q_values, hidden = q(s, h, a, r)
     else:
-        q_values, hidden = q(s, h, a_tensor, r_tensor)
+        q_values, hidden = q(s, h, a, r)
     
     return q_values, hidden
 
@@ -49,13 +62,15 @@ def compute_td_error(experiences, q, q_target, device, n_action, no_grad=False):
     """
     experiences들이 주어졌을 때 각각의 TD error 계산
     """
+    burnin, sequence, bootstrap = zip(*[e.decompress() for e in experiences])
 
-    burnin = [e.burnin for e in experiences]
-    sequence = [e.sequence for e in experiences]
-    bootstrap = [e.bootstrap for e in experiences]
+    burnin, sequence, bootstrap = (np.stack(e).transpose(1, 0) for e in (burnin, sequence, bootstrap))
 
-    action = torch.tensor([b[0].a for b in bootstrap], dtype=torch.int64)
-    bootstrap_reward = torch.tensor([[arhs.r for arhs in b] for b in bootstrap]) # Tensor[BATCH_SIZE, N_STEP_BOOTSTRAP]
+    action = torch.tensor(tuple(b.a for b in bootstrap[0]), dtype=torch.int64)
+
+    bootstrap_n = len(bootstrap)
+    bootstrap_reward = tuple(zip(*bootstrap.reshape(-1)))[1]
+    bootstrap_reward = torch.tensor(bootstrap_reward, dtype=torch.float32).reshape(bootstrap_n, -1) # Tensor[N_STEP_BOOTSTRAP, BATCH_SIZE]
 
     _, hidden = replay_q(q, device, burnin, n_action, no_grad=True)
     q_values, hidden = replay_q(q, device, sequence, n_action, hidden=hidden, no_grad=no_grad)
@@ -67,8 +82,8 @@ def compute_td_error(experiences, q, q_target, device, n_action, no_grad=False):
     q_argmax = torch.argmax(q_values, dim=1)
 
     _, hidden = replay_q(q_target, device, burnin, n_action, no_grad=True)
-    _, hidden = replay_q(q_target, device, sequence, n_action, no_grad=True)
-    q_values, _ = replay_q(q_target, device, bootstrap, n_action, no_grad=True)
+    _, hidden = replay_q(q_target, device, sequence, n_action, hidden=hidden, no_grad=True)
+    q_values, _ = replay_q(q_target, device, bootstrap, n_action, hidden=hidden, no_grad=True)
 
     q_target = q_values[torch.arange(batch_size), q_argmax]
     q_target = inverse_rescale(q_target)
@@ -76,7 +91,7 @@ def compute_td_error(experiences, q, q_target, device, n_action, no_grad=False):
     with torch.no_grad():
         for i in reversed(range(N_STEP_BOOTSTRAPING)):
             q_target = q_target * DISCOUNT_FACTOR
-            q_target = q_target + bootstrap_reward[:,i]
+            q_target = q_target + bootstrap_reward[i,:]
     
     q_target = rescale(q_target)
-    return (q_expect - q_target)**2 * 0.5
+    return q_expect - q_target
